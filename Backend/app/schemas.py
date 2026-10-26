@@ -25,12 +25,6 @@ class MergeBusesRequest(BaseModel):
     target_bus_id:int
     travel_date:str
 
-class MergeBusRequest(BaseModel):
-    source_bus_id:int
-    target_bus_id:int
-    travel_date:str
-
-
 # ---------Seat Data Fetched from database-------------------
 
 class SeatResponse(BaseModel):
