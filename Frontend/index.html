@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bus Booking System</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #f4f6f9;
+      color: #333;
+      padding: 20px;
+    }
+
+    header {
+      background-color: #1e293b;
+      color: white;
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+
+    h2, h3 {
+      margin-bottom: 15px;
+      color: #1e293b;
+    }
+
+    .btn {
+      padding: 10px 18px;
+      background-color: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      display: inline-block;
+    }
+
+    .btn:hover { background-color: #1d4ed8; }
+    .btn-danger { background-color: #dc2626; }
+    .btn-danger:hover { background-color: #b91c1c; }
+    .btn-warning { background-color: #d97706; }
+    .btn-warning:hover { background-color: #b45309; }
+
+    input, select {
+      padding: 8px;
+      margin: 5px 0 15px 0;
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    .hidden { display: none !important; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 15px;
+    }
+
+    .bus-card {
+      border: 1px solid #e2e8f0;
+      padding: 15px;
+      border-radius: 6px;
+      background-color: #fafafa;
+      text-align: center;
+    }
+
+    .seat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      max-width: 400px;
+      margin: 20px auto;
+    }
+
+    .seat {
+      padding: 12px;
+      text-align: center;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      color: white;
+    }
+
+    .seat.AVAILABLE { background-color: #16a34a; }
+    .seat.HELD { background-color: #ca8a04; }
+    .seat.BOOKED { background-color: #dc2626; cursor: not-allowed; }
+
+    .legend {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 14px;
+    }
+
+    .box { width: 15px; height: 15px; border-radius: 3px; }
+
+    .api-config {
+      background: #e2e8f0;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      font-size: 14px;
+    }
+
+    .admin-box {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Bus Booking System</h1>
+      <div id="user-info" class="hidden">
+        <span id="role-display" style="font-weight: bold;"></span>
+        <button id="logout-btn" class="btn btn-danger" style="margin-left: 10px;">Logout</button>
+      </div>
+    </header>
+
+    <!-- API Config Banner -->
+    <div class="api-config">
+      <label><b>Backend Base URL:</b></label>
+      <input type="text" id="api-url" value="http://localhost:8000" style="width: calc(100% - 110px); display: inline-block;">
+      <button id="save-api-btn" class="btn" style="width: 100px;">Save</button>
+    </div>
+
+    <!-- 1. LOGIN SECTION -->
+    <div id="login-section" class="card">
+      <h2>Select Role to Login</h2>
+      <button id="customer-login-btn" class="btn" style="width: 48%; margin-right: 2%;">Customer Login</button>
+      <button id="admin-login-btn" class="btn btn-warning" style="width: 48%;">Admin Login</button>
+    </div>
+
+    <!-- 2. ADMIN DASHBOARD -->
+    <div id="admin-section" class="card hidden">
+      <h2 style="color: #b45309;">Admin Control Center</h2>
+
+      <!-- Section A: Set Fleet -->
+      <div class="admin-box">
+        <h3>1. Dynamically Set Fleet Size</h3>
+        <label>Set Total Number of Active Buses:</label>
+        <input type="number" id="fleet-size-input" min="1" max="100">
+        <button id="set-fleet-btn" class="btn">Update Fleet Size</button>
+      </div>
+
+      <!-- Section B: Merge Buses -->
+      <div class="admin-box">
+        <h3>2. Merge Low Occupancy Buses (LF &lt; 20%)</h3>
+        <label>Source Bus ID (To be emptied/merged):</label>
+        <input type="number" id="merge-source-id" placeholder="e.g. 2">
+        
+        <label>Target Bus ID (To receive seats):</label>
+        <input type="number" id="merge-target-id" placeholder="e.g. 1">
+        
+        <label>Travel Date:</label>
+        <input type="date" id="admin-merge-date">
+        
+        <button id="merge-buses-btn" class="btn btn-warning">Execute Merge</button>
+      </div>
+
+      <!-- Section C: Strategy Switcher -->
+      <div class="admin-box">
+        <h3>3. Execution Serving Strategy</h3>
+        <label>Serving Mode:</label>
+        <select id="strategy-select">
+          <option value="iterative">Iterative (Single-Threaded)</option>
+          <option value="threaded" selected>Threaded (Multi-Threaded Pool)</option>
+          <option value="forking">Forking (Multi-Process Pool)</option>
+        </select>
+        <button id="set-strategy-btn" class="btn">Apply Serving Mode</button>
+      </div>
+    </div>
+
+    <!-- 3. CUSTOMER BUS VIEW -->
+    <div id="bus-list-section" class="card hidden">
+      <h2>Available Buses <span style="font-size: 13px; color: #16a34a; font-weight: normal;">(Live Sync Active)</span></h2>
+      <label>Select Travel Date:</label>
+      <input type="date" id="travel-date">
+
+      <div id="bus-grid" class="grid"></div>
+    </div>
+
+    <!-- 4. SEAT LAYOUT -->
+    <div id="seat-section" class="card hidden">
+      <button id="back-to-buses-btn" class="btn" style="margin-bottom: 15px;">← Back to Buses</button>
+      <h2 id="selected-bus-title">Bus Seats</h2>
+      <p id="views-count-display" style="font-weight: bold; color: #2563eb; margin-bottom: 10px;"></p>
+
+      <div class="legend">
+        <div class="legend-item"><div class="box" style="background:#16a34a;"></div> Available</div>
+        <div class="legend-item"><div class="box" style="background:#ca8a04;"></div> Held (5 mins)</div>
+        <div class="legend-item"><div class="box" style="background:#dc2626;"></div> Booked</div>
+      </div>
+
+      <div id="seat-grid" class="seat-grid"></div>
+
+      <div id="seat-actions" class="hidden" style="text-align: center; margin-top: 20px; background: #f8fafc; padding: 15px; border-radius: 6px;">
+        <h3 id="selected-seat-info">Selected Seat: None</h3>
+        <p id="hold-timer-display" style="color: #d97706; font-weight: bold; margin: 5px 0;"></p>
+        <div style="margin-top: 10px;">
+          <button id="hold-seat-btn" class="btn btn-warning">Hold Seat</button>
+          <button id="confirm-booking-btn" class="btn">Confirm Booking</button>
+          <button id="cancel-booking-btn" class="btn btn-danger">Cancel Booking</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      let API_URL = localStorage.getItem('API_URL') || 'http://localhost:8000';
+      let currentUser = null;
+      let currentUsername = null;
+      let selectedBusId = null;
+      let selectedSeatNumber = null;
+      let holdTimer = null;
+      let pollInterval = null;
+
+      // Broadcast channel for instant cross-tab updates
+      const busChannel = new BroadcastChannel('bus_fleet_updates');
+      busChannel.onmessage = function() {
+        if (currentUser === 'CUSTOMER' && !document.getElementById('bus-list-section').classList.contains('hidden')) {
+          loadBuses();
+        }
+      };
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      document.getElementById('api-url').value = API_URL;
+      document.getElementById('travel-date').value = todayStr;
+      document.getElementById('admin-merge-date').value = todayStr;
+
+      // Event Listeners
+      document.getElementById('save-api-btn').addEventListener('click', saveApiUrl);
+      document.getElementById('customer-login-btn').addEventListener('click', function() { login('CUSTOMER'); });
+      document.getElementById('admin-login-btn').addEventListener('click', function() { login('ADMIN'); });
+      document.getElementById('logout-btn').addEventListener('click', logout);
+      document.getElementById('set-fleet-btn').addEventListener('click', setFleetSize);
+      document.getElementById('merge-buses-btn').addEventListener('click', mergeBuses);
+      document.getElementById('set-strategy-btn').addEventListener('click', setStrategy);
+      document.getElementById('travel-date').addEventListener('change', loadBuses);
+      document.getElementById('back-to-buses-btn').addEventListener('click', backToBuses);
+      document.getElementById('hold-seat-btn').addEventListener('click', holdSeat);
+      document.getElementById('confirm-booking-btn').addEventListener('click', confirmBooking);
+      document.getElementById('cancel-booking-btn').addEventListener('click', cancelBooking);
+
+      function saveApiUrl() {
+        API_URL = document.getElementById('api-url').value;
+        localStorage.setItem('API_URL', API_URL);
+        alert('API URL saved: ' + API_URL);
+      }
+
+      function login(role) {
+        if (role === 'CUSTOMER') {
+          const defaultUser = 'Customer_' + Math.floor(Math.random() * 899 + 100);
+          const username = prompt("Enter your Customer Name / Username:", defaultUser);
+          if (!username || !username.trim()) return;
+          currentUser = 'CUSTOMER';
+          currentUsername = username.trim();
+        } else {
+          currentUser = 'ADMIN';
+          currentUsername = 'Admin';
+        }
+
+        document.getElementById('login-section').classList.add('hidden');
+        document.getElementById('user-info').classList.remove('hidden');
+        document.getElementById('role-display').innerText = 'User: ' + currentUsername + ' (' + currentUser + ')';
+
+        if (currentUser === 'ADMIN') {
+          document.getElementById('admin-section').classList.remove('hidden');
+          document.getElementById('bus-list-section').classList.add('hidden');
+          clearInterval(pollInterval);
+        } else {
+          document.getElementById('admin-section').classList.add('hidden');
+          document.getElementById('bus-list-section').classList.remove('hidden');
+          loadBuses();
+          
+          // Poll bus list every 1.5s
+          clearInterval(pollInterval);
+          pollInterval = setInterval(loadBuses, 1500);
+        }
+      }
+
+      function logout() {
+        currentUser = null;
+        currentUsername = null;
+        selectedBusId = null;
+        selectedSeatNumber = null;
+        clearInterval(holdTimer);
+        clearInterval(pollInterval);
+        document.getElementById('user-info').classList.add('hidden');
+        document.getElementById('admin-section').classList.add('hidden');
+        document.getElementById('bus-list-section').classList.add('hidden');
+        document.getElementById('seat-section').classList.add('hidden');
+        document.getElementById('login-section').classList.remove('hidden');
+      }
+
+      async function setFleetSize() {
+        const size = document.getElementById('fleet-size-input').value;
+        try {
+          const res = await fetch(API_URL + '/admin/buses/set-fleet?count=' + size, { method: 'POST' });
+          const data = await res.json();
+          alert(data.message || 'Fleet updated!');
+          
+          // Notify customer tabs to refresh immediately
+          busChannel.postMessage({ type: 'FLEET_UPDATED' });
+        } catch (err) {
+          alert('Error updating fleet: ' + err.message);
+        }
+      }
+
+      async function mergeBuses() {
+        const sourceId = document.getElementById('merge-source-id').value;
+        const targetId = document.getElementById('merge-target-id').value;
+        const date = document.getElementById('admin-merge-date').value;
+
+        if (!sourceId || !targetId) {
+          alert('Enter both Source and Target Bus IDs.');
+          return;
+        }
+
+        try {
+          const res = await fetch(API_URL + '/admin/buses/merge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              source_bus_id: parseInt(sourceId),
+              target_bus_id: parseInt(targetId),
+              travel_date: date
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Merge failed');
+          alert(data.message || 'Merge successful!');
+
+          // Notify customer tabs
+          busChannel.postMessage({ type: 'FLEET_UPDATED' });
+        } catch (err) {
+          alert('Merge Error: ' + err.message);
+        }
+      }
+
+      async function setStrategy() {
+        const strategy = document.getElementById('strategy-select').value;
+        try {
+          const res = await fetch(API_URL + '/admin/strategy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ strategy: strategy })
+          });
+          const data = await res.json();
+          alert(data.message || ('Strategy mode switched to ' + strategy));
+        } catch (err) {
+          alert('Error setting strategy: ' + err.message);
+        }
+      }
+
+      async function loadBuses() {
+        const grid = document.getElementById('bus-grid');
+
+        try {
+          const res = await fetch(API_URL + '/buses');
+          if (!res.ok) return;
+          const buses = await res.json();
+
+          const activeBuses = buses.filter(b => b.status === 'ACTIVE');
+
+          grid.innerHTML = '';
+          if (activeBuses.length === 0) {
+            grid.innerHTML = '<p>No active buses available.</p>';
+            return;
+          }
+
+          activeBuses.forEach(function(bus) {
+            const card = document.createElement('div');
+            card.className = 'bus-card';
+            card.innerHTML = '<h4>' + (bus.bus_name || ('Bus ' + bus.id)) + '</h4>' +
+                             '<p>Capacity: ' + (20) + '</p>' +
+                             '<p style="color:#2563eb; font-weight:bold;">Views: ' + (bus.views_count || 0) + '</p>' +
+                             '<button class="btn select-bus-btn" style="margin-top: 10px;">Select Seats</button>';
+
+            card.querySelector('.select-bus-btn').addEventListener('click', function() {
+              clearInterval(pollInterval);
+              viewSeats(bus.id, (bus.bus_name || ('Bus ' + bus.id)));
+            });
+
+            grid.appendChild(card);
+          });
+        } catch (err) {
+          // Silent failure during polling
+        }
+      }
+
+      async function viewSeats(busId, busName) {
+        selectedBusId = busId;
+        const date = document.getElementById('travel-date').value;
+
+        document.getElementById('bus-list-section').classList.add('hidden');
+        document.getElementById('seat-section').classList.remove('hidden');
+        document.getElementById('selected-bus-title').innerText = busName + ' - Seat Selection';
+
+        try {
+          const res = await fetch(API_URL + '/seats?bus_id=' + busId + '&travel_date=' + date);
+          const data = await res.json();
+
+          document.getElementById('views-count-display').innerText = '👁 Total Viewers for this Bus: ' + (data.views_count || 0);
+          renderSeatGrid(data.seats || []);
+        } catch (err) {
+          alert('Failed to load seats: ' + err.message);
+        }
+      }
+
+      function renderSeatGrid(seatsData) {
+        const grid = document.getElementById('seat-grid');
+        grid.innerHTML = '';
+
+        const seatMap = {};
+        seatsData.forEach(function(s) { seatMap[s.seat_number] = s; });
+
+        // Rendering strictly 20 seats
+        for (let i = 1; i <= 20; i++) {
+          const seatObj = seatMap[i] || { seat_number: i, status: 'AVAILABLE' };
+          const seatDiv = document.createElement('div');
+          seatDiv.className = 'seat ' + seatObj.status;
+          seatDiv.innerText = i;
+
+          if (seatObj.status !== 'BOOKED') {
+            (function(seatNumber, status) {
+              seatDiv.addEventListener('click', function() { selectSeat(seatNumber, status); });
+            })(i, seatObj.status);
+          }
+
+          grid.appendChild(seatDiv);
+        }
+      }
+
+      function selectSeat(seatNum, status) {
+        selectedSeatNumber = seatNum;
+        document.getElementById('seat-actions').classList.remove('hidden');
+        document.getElementById('selected-seat-info').innerText = 'Selected Seat: #' + seatNum + ' (' + status + ')';
+      }
+
+      async function holdSeat() {
+        if (!selectedSeatNumber) return;
+        const date = document.getElementById('travel-date').value;
+
+        try {
+          const res = await fetch(API_URL + '/hold', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bus_id: selectedBusId,
+              seat_number: selectedSeatNumber,
+              travel_date: date,
+              held_by: currentUsername
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Hold action failed');
+
+          alert('Seat held for 5 minutes by ' + currentUsername + '!');
+          startHoldTimer(300);
+          viewSeats(selectedBusId, document.getElementById('selected-bus-title').innerText);
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+      }
+
+      async function confirmBooking() {
+        if (!selectedSeatNumber) return;
+        const date = document.getElementById('travel-date').value;
+
+        try {
+          const res = await fetch(API_URL + '/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bus_id: selectedBusId,
+              seat_number: selectedSeatNumber,
+              travel_date: date,
+              client_name: currentUsername
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Booking failed');
+
+          alert('Booking Confirmed! Ticket ID: ' + data.ticket_id);
+          clearInterval(holdTimer);
+          document.getElementById('hold-timer-display').innerText = '';
+          viewSeats(selectedBusId, document.getElementById('selected-bus-title').innerText);
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+      }
+
+      async function cancelBooking() {
+        if (!selectedSeatNumber) return;
+        const date = document.getElementById('travel-date').value;
+
+        try {
+          const res = await fetch(API_URL + '/cancel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bus_id: selectedBusId,
+              seat_number: selectedSeatNumber,
+              travel_date: date,
+              client_name: currentUsername
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Cancel failed');
+
+          alert('Booking or hold cancelled successfully!');
+          clearInterval(holdTimer);
+          document.getElementById('hold-timer-display').innerText = '';
+          viewSeats(selectedBusId, document.getElementById('selected-bus-title').innerText);
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+      }
+
+      function startHoldTimer(durationSeconds) {
+        clearInterval(holdTimer);
+        let timer = durationSeconds;
+        const timerDisplay = document.getElementById('hold-timer-display');
+
+        holdTimer = setInterval(function() {
+          const minutes = Math.floor(timer / 60);
+          const seconds = timer % 60;
+          timerDisplay.innerText = 'Hold Expires In: ' + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+
+          if (--timer < 0) {
+            clearInterval(holdTimer);
+            timerDisplay.innerText = 'Hold Expired!';
+          }
+        }, 1000);
+      }
+
+      function backToBuses() {
+        clearInterval(holdTimer);
+        document.getElementById('seat-section').classList.add('hidden');
+        document.getElementById('seat-actions').classList.add('hidden');
+        document.getElementById('bus-list-section').classList.remove('hidden');
+        loadBuses();
+
+        clearInterval(pollInterval);
+        pollInterval = setInterval(loadBuses, 1500);
+      }
+    });
+  </script>
+</body>
+</html>
