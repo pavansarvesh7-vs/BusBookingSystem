@@ -66,7 +66,7 @@ class BusResponse(BaseModel):
     status:str
     class Config:
         from_attributes=True
-
+        
 # -------Seat Cancellation-------------------------------------
 
 class CancelSeatBooking(BaseModel):
