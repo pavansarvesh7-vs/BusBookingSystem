@@ -51,6 +51,7 @@ class SeatAvailabilityResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 # ---------Bus Data Fetched from database-----------------------
 
 class BusResponse(BaseModel):
@@ -68,4 +69,3 @@ class CancelSeatBooking(BaseModel):
     bus_id:int
     seat_number:int
     travel_date:str
-

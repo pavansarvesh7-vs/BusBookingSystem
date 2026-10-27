@@ -145,25 +145,25 @@
       </div>
     </header>
 
-    <!-- Login Section -->
+    <!-- Login Page-->
     <div id="login-section" class="card">
       <h2>Select Role to Login</h2>
       <button id="customer-login-btn" class="btn" style="width: 48%; margin-right: 2%;">Customer Login</button>
       <button id="admin-login-btn" class="btn btn-warning" style="width: 48%;">Admin Login</button>
     </div>
 
-    <!--  Admin Dashboard-->
+    <!--Admin Section-->
     <div id="admin-section" class="card hidden">
-      <h2 style="color: #b45309;">Admin Control Center</h2>
+      <h2 style="color: #b45309;">Admin Section</h2>
 
-      <!-- Dynamically setting the Initial Numer of Buses-->
+      <!--Set Initial Number Of Buses-->
       <div class="admin-box">
         <h3>1. Set the Initial Number of Buses</h3>
         <input type="number" id="fleet-size-input" value="10" min="1" max="100">
         <button id="set-fleet-btn" class="btn btn-warning">Update</button>
       </div>
 
-      <!-- Merge Buses -->
+      <!--Merge Buses -->
       <div class="admin-box">
         <h3>2. Merge Buses (LF &lt; 20%)</h3>
         <label>Source Bus ID:</label>
@@ -178,7 +178,7 @@
         <button id="merge-buses-btn" class="btn btn-warning">Merge</button>
       </div>
 
-      <!-- Strategy Switcher -->
+      <!--Strategy Switcher -->
       <div class="admin-box">
         <h3>3. Serving Strategy</h3>
         <label>Serving Mode:</label>
@@ -191,7 +191,7 @@
       </div>
     </div>
 
-    <!--  Customer Section-->
+    <!-- 3. Customer Bus View-->
     <div id="bus-list-section" class="card hidden">
       <h2>Available Buses <span style="font-size: 13px; color: #16a34a; font-weight: normal;"></span></h2>
       <label>Select Travel Date:</label>
@@ -200,7 +200,7 @@
       <div id="bus-grid" class="grid"></div>
     </div>
 
-   
+    <!-- 4. Seat Layout-->
     <div id="seat-section" class="card hidden">
       <button id="back-to-buses-btn" class="btn" style="margin-bottom: 15px;">← Back to Buses</button>
       <h2 id="selected-bus-title">Bus Seats</h2>
@@ -423,7 +423,7 @@
           const res = await fetch(API_URL + '/seats?bus_id=' + busId + '&travel_date=' + date);
           const data = await res.json();
 
-          document.getElementById('views-count-display').innerText = '👁 Total Viewers for this Bus: ' + (data.views_count || 0);
+          document.getElementById('views-count-display').innerText = 'Total Viewers for this Bus: ' + (data.views_count || 0);
           renderSeatGrid(data.seats || []);
         } catch (err) {
           alert('Failed to load seats: ' + err.message);
