@@ -12,7 +12,7 @@ from app.schemas import (
     SeatResponse,
 )
 
-router = APIRouter()
+router = APIRouter(tags=["Booking Operations"])
 
 
 def _ensure_utc(dt: datetime | None) -> datetime | None:
@@ -47,6 +47,7 @@ def get_seats(
         .all()
     )
 
+    # Lazily release expired holds
     for seat in seats:
         held_until = _ensure_utc(seat.held_until)
         if seat.status == "HELD" and held_until and held_until < now:
@@ -68,6 +69,18 @@ def get_seats(
 @router.post("/hold")
 def holdTheSeat(req: SeatHoldRequest, db: Session = Depends(get_db)):
     db.expire_all()
+    
+    # Verify valid bus and seat boundary
+    bus = db.query(Bus).filter(Bus.id == req.bus_id, Bus.status == "ACTIVE").first()
+    if not bus:
+        raise HTTPException(status_code=404, detail="Active bus not found")
+
+    if req.seat_number < 1 or req.seat_number > bus.total_capacity:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid seat number. Bus capacity is {bus.total_capacity} seats."
+        )
+
     seat = (
         db.query(Seat)
         .filter(
@@ -102,7 +115,7 @@ def holdTheSeat(req: SeatHoldRequest, db: Session = Depends(get_db)):
             if seat.held_by != req.held_by:
                 raise HTTPException(
                     status_code=403,
-                    detail=f"Seat already held by {seat.held_by}"
+                    detail=f"Seat is already held by another session ({seat.held_by})."
                 )
 
     seat.status = "HELD"
@@ -136,7 +149,7 @@ def confirm_booking(req: BookingConfirmRequest, db: Session = Depends(get_db)):
     )
 
     if not seat:
-        raise HTTPException(status_code=404, detail="Seat not found")
+        raise HTTPException(status_code=404, detail="Seat record not found")
 
     now = datetime.now(UTC)
     if seat.status == "BOOKED":
@@ -151,17 +164,17 @@ def confirm_booking(req: BookingConfirmRequest, db: Session = Depends(get_db)):
             db.commit()
             raise HTTPException(
                 status_code=400,
-                detail="Seat hold has expired.",
+                detail="Seat hold has expired. Please hold the seat again.",
             )
 
         if seat.held_by != req.client_name:
             raise HTTPException(
                 status_code=403,
-                detail=f"Seat is currently held by {seat.held_by}. You cannot confirm it.",
+                detail=f"Access denied: Seat is held by a different session ({seat.held_by}).",
             )
     else:
         raise HTTPException(
-            status_code=400, detail="Seat must be held before booking"
+            status_code=400, detail="Seat must be held before confirmation"
         )
 
     seat.status = "BOOKED"
@@ -174,11 +187,9 @@ def confirm_booking(req: BookingConfirmRequest, db: Session = Depends(get_db)):
     db.add(ticket)
     db.commit()
 
-    logger.info(
-        "Ticket confirmed."
-    )
+    logger.info(f"Ticket #{ticket.id} confirmed for {req.client_name} on Bus #{seat.bus_id}")
 
-    # Auto-scaling Calculation
+    # Auto-scaling Calculation at 80% Load Factor
     active_buses = db.query(Bus).filter(Bus.status == "ACTIVE").all()
     total_seats = sum(b.total_capacity for b in active_buses)
 
@@ -192,21 +203,28 @@ def confirm_booking(req: BookingConfirmRequest, db: Session = Depends(get_db)):
 
     scaled = False
     if load_factor >= 0.8:
+        active_count = len(active_buses)
         max_bus = db.query(Bus).order_by(Bus.id.desc()).first()
         next_id = (max_bus.id if max_bus else 0) + 1
 
         new_bus1 = Bus(
-            id=next_id, bus_name=f"B_{next_id}", total_capacity=20, status="ACTIVE"
+            id=next_id,
+            bus_name=f"B_{active_count + 1}",
+            total_capacity=20,
+            status="ACTIVE",
         )
         new_bus2 = Bus(
-            id=next_id + 1, bus_name=f"B_{next_id + 1}", total_capacity=20, status="ACTIVE"
+            id=next_id + 1,
+            bus_name=f"B_{active_count + 2}",
+            total_capacity=20,
+            status="ACTIVE",
         )
         db.add_all([new_bus1, new_bus2])
         db.commit()
 
         scaled = True
         logger.info(
-            "Auto-scaling successfully performed."
+            f"Load factor at {load_factor:.2%}. Auto-scaling spawned Bus B_{active_count + 1} and B_{active_count + 2}."
         )
 
     return {
@@ -247,7 +265,7 @@ def cancelSeatBooking(req: CancelSeatBooking, db: Session = Depends(get_db)):
     if seat.held_by and seat.held_by != req.client_name:
         raise HTTPException(
             status_code=403,
-            detail="You are nnot able to cancel this seat because it belongs to another customer.",
+            detail="Access denied: You cannot cancel a seat held/booked by another customer.",
         )
 
     if seat.status == "BOOKED":
@@ -267,14 +285,13 @@ def cancelSeatBooking(req: CancelSeatBooking, db: Session = Depends(get_db)):
     db.commit()
 
     return {
-        "message": "seat cancelled successfully",
+        "message": "Seat cancelled successfully",
         "status": seat.status,
     }
 
 
 @router.get("/buses")
 def list_buses(db: Session = Depends(get_db)):
-    
     db.expire_all()
 
     buses = (

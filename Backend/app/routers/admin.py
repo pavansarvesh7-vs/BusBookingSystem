@@ -4,6 +4,8 @@ from app.database import get_db
 from app.logger_config import logger
 from app.models import Bus, Seat
 from app.schemas import MergeBusesRequest
+# from pydantic import BaseModel
+from pydantic import BaseModel
 
 router = APIRouter(tags=["Admin Operations"])
 
@@ -137,3 +139,23 @@ def set_fleet_size(
 
     db.commit()
     return {"message": "Noof Buses are updated!"}
+
+class StrategyRequest(BaseModel):
+    strategy: str  # "iterative", "threaded", or "forking"
+
+CURRENT_SERVED_STRATEGY = "threaded"
+
+@router.post("/strategy")
+def set_serving_strategy(req: StrategyRequest):
+    global CURRENT_SERVED_STRATEGY
+    if req.strategy not in ["iterative", "threaded", "forking"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid strategy mode. Choose from 'iterative', 'threaded', or 'forking'."
+        )
+    CURRENT_SERVED_STRATEGY = req.strategy
+    logger.info(f"Execution serving strategy changed to: {CURRENT_SERVED_STRATEGY}")
+    return {
+        "message": f"Serving strategy updated to {CURRENT_SERVED_STRATEGY}",
+        "active_strategy": CURRENT_SERVED_STRATEGY
+    }
