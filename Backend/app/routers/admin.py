@@ -1,12 +1,87 @@
+import os
+import threading
+import time
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
+
 from app.database import get_db
 from app.logger_config import logger
 from app.models import Bus, Seat, Ticket
 from app.schemas import MergeBusesRequest
-from pydantic import BaseModel
 
 router = APIRouter()
+
+# Global Strategy State
+CURRENT_SERVED_STRATEGY = "threaded"
+
+# Reusable Executors
+thread_pool = ThreadPoolExecutor(max_workers=10)
+process_pool = ProcessPoolExecutor(max_workers=4)
+
+
+# Top-level functions for Thread/Process Pools
+def _simulate_task_work(delay_seconds: float):
+    time.sleep(delay_seconds)
+    return {
+        "pid": os.getpid(),
+        "thread_name": threading.current_thread().name,
+    }
+
+
+def execute_current_strategy(delay_seconds: float = 1.5):
+    """
+    Executes a task according to CURRENT_SERVED_STRATEGY:
+    - iterative: Synchronous delay on the main event thread.
+    - threaded: Offloaded to ThreadPoolExecutor pool.
+    - forking: Offloaded to ProcessPoolExecutor pool.
+    """
+    start_time = time.time()
+    current_pid = os.getpid()
+    current_thread = threading.current_thread().name
+
+    if CURRENT_SERVED_STRATEGY == "iterative":
+        time.sleep(delay_seconds)
+        res = {"pid": current_pid, "thread_name": current_thread}
+
+    elif CURRENT_SERVED_STRATEGY == "threaded":
+        future = thread_pool.submit(_simulate_task_work, delay_seconds)
+        res = future.result()
+
+    elif CURRENT_SERVED_STRATEGY == "forking":
+        future = process_pool.submit(_simulate_task_work, delay_seconds)
+        res = future.result()
+
+    else:
+        time.sleep(delay_seconds)
+        res = {"pid": current_pid, "thread_name": current_thread}
+
+    res["elapsed_seconds"] = round(time.time() - start_time, 2)
+    res["strategy_used"] = CURRENT_SERVED_STRATEGY
+    return res
+
+
+class StrategyRequest(BaseModel):
+    strategy: str  # "iterative", "threaded", or "forking"
+
+
+@router.post("/strategy")
+def set_serving_strategy(req: StrategyRequest):
+    global CURRENT_SERVED_STRATEGY
+    if req.strategy not in ["iterative", "threaded", "forking"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid strategy mode. Choose from 'iterative', 'threaded', or 'forking'.",
+        )
+    CURRENT_SERVED_STRATEGY = req.strategy
+    logger.info(
+        f"Execution serving strategy changed to: {CURRENT_SERVED_STRATEGY}"
+    )
+    return {
+        "message": f"Serving strategy updated to {CURRENT_SERVED_STRATEGY}",
+        "active_strategy": CURRENT_SERVED_STRATEGY,
+    }
 
 
 @router.post("/buses/merge")
@@ -26,7 +101,6 @@ def mergeBuses(req: MergeBusesRequest, db: Session = Depends(get_db)):
             status_code=400, detail="Source and target bus cannot be the same"
         )
 
-    # Standardized date string conversion
     travel_date_str = str(req.travel_date)
 
     source_seats = (
@@ -62,7 +136,6 @@ def mergeBuses(req: MergeBusesRequest, db: Session = Depends(get_db)):
     source_seat_numbers = {s.seat_number for s in source_seats}
     target_seat_numbers = {s.seat_number for s in target_seats}
 
-    # Strict Zero-Collision Rule
     conflicts = source_seat_numbers.intersection(target_seat_numbers)
     if conflicts:
         raise HTTPException(
@@ -70,13 +143,11 @@ def mergeBuses(req: MergeBusesRequest, db: Session = Depends(get_db)):
             detail=f"Seat collision detected on seat(s) {sorted(list(conflicts))}. Merge aborted.",
         )
 
-    # Lock buses during mutation
     source_bus.status = "ALTERATION_IN_PROGRESS"
     target_bus.status = "ALTERATION_IN_PROGRESS"
     db.commit()
 
     try:
-        # Fetch all existing seats on target bus for this date to safely merge
         all_target_seats = (
             db.query(Seat)
             .filter(
@@ -91,13 +162,11 @@ def mergeBuses(req: MergeBusesRequest, db: Session = Depends(get_db)):
             num = s_seat.seat_number
 
             if num in target_seat_map:
-                # Copy status and hold metadata to the target bus seat record
                 t_seat = target_seat_map[num]
                 t_seat.status = s_seat.status
                 t_seat.held_by = s_seat.held_by
                 t_seat.held_until = s_seat.held_until
 
-                # Re-link any issued tickets to the target seat
                 if s_seat.status == "BOOKED":
                     ticket = (
                         db.query(Ticket)
@@ -107,10 +176,8 @@ def mergeBuses(req: MergeBusesRequest, db: Session = Depends(get_db)):
                     if ticket:
                         ticket.seat_id = t_seat.id
 
-                # Safely purge original source seat entry
                 db.delete(s_seat)
             else:
-                # Move seat record directly if no placeholder existed
                 s_seat.bus_id = target_bus.id
 
         source_bus.status = "MERGED"
@@ -184,28 +251,3 @@ def set_fleet_size(
 
     db.commit()
     return {"message": "Number of buses updated successfully!"}
-
-
-class StrategyRequest(BaseModel):
-    strategy: str  # "iterative", "threaded", or "forking"
-
-
-CURRENT_SERVED_STRATEGY = "threaded"
-
-
-@router.post("/strategy")
-def set_serving_strategy(req: StrategyRequest):
-    global CURRENT_SERVED_STRATEGY
-    if req.strategy not in ["iterative", "threaded", "forking"]:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid strategy mode. Choose from 'iterative', 'threaded', or 'forking'.",
-        )
-    CURRENT_SERVED_STRATEGY = req.strategy
-    logger.info(
-        f"Execution serving strategy changed to: {CURRENT_SERVED_STRATEGY}"
-    )
-    return {
-        "message": f"Serving strategy updated to {CURRENT_SERVED_STRATEGY}",
-        "active_strategy": CURRENT_SERVED_STRATEGY,
-    }

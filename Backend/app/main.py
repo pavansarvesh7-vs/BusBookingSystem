@@ -46,11 +46,8 @@ app.add_middleware(
 def home():
     return {"message": "Welcome to the Bus Booking Application API"}
 
-
 #------Including the OperationsOnBusesAndSeatsRouter Into main.py-------
-
 app.include_router(OperationsOnBusesAndSeatsRouter)
 
 # ---Including the MergeBusesRouter into the main.py-----------------
-
-app.include_router(MergeBusesRouter, prefix="/admin")
+app.include_router(MergeBusesRouter)

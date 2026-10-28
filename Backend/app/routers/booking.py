@@ -11,6 +11,7 @@ from app.schemas import (
     SeatHoldRequest,
     SeatResponse,
 )
+from app.routers.admin import execute_current_strategy
 
 router = APIRouter(tags=["Booking Operations"])
 
@@ -27,6 +28,9 @@ def get_seats(
     travel_date: str = Query(..., description="Format: YYYY-MM-DD"),
     db: Session = Depends(get_db),
 ):
+    # Route execution through the Admin-selected serving strategy
+    exec_info = execute_current_strategy(delay_seconds=1.5)
+
     db.expire_all()
     bus = db.query(Bus).filter(Bus.id == bus_id).first()
     if not bus:
@@ -57,6 +61,12 @@ def get_seats(
 
     db.commit()
 
+    logger.info(
+        f"[/seats] Mode: {exec_info['strategy_used']} | "
+        f"PID: {exec_info['pid']} | Thread: {exec_info['thread_name']} | "
+        f"Time: {exec_info['elapsed_seconds']}s"
+    )
+
     return {
         "bus_id": bus.id,
         "bus_name": bus.bus_name,
@@ -68,6 +78,8 @@ def get_seats(
 
 @router.post("/hold")
 def holdTheSeat(req: SeatHoldRequest, db: Session = Depends(get_db)):
+    exec_info = execute_current_strategy(delay_seconds=1.5)
+
     db.expire_all()
     
     # Verify valid bus and seat boundary
@@ -124,7 +136,8 @@ def holdTheSeat(req: SeatHoldRequest, db: Session = Depends(get_db)):
     db.commit()
 
     logger.info(
-        f"Seat {req.seat_number} on Bus {req.bus_id} held by {req.held_by}"
+        f"Seat {req.seat_number} on Bus {req.bus_id} held by {req.held_by} "
+        f"(Mode: {exec_info['strategy_used']}, PID: {exec_info['pid']}, Thread: {exec_info['thread_name']})"
     )
 
     return {
@@ -136,6 +149,8 @@ def holdTheSeat(req: SeatHoldRequest, db: Session = Depends(get_db)):
 
 @router.post("/confirm")
 def confirm_booking(req: BookingConfirmRequest, db: Session = Depends(get_db)):
+    exec_info = execute_current_strategy(delay_seconds=1.5)
+
     db.expire_all()
     seat = (
         db.query(Seat)
@@ -187,7 +202,10 @@ def confirm_booking(req: BookingConfirmRequest, db: Session = Depends(get_db)):
     db.add(ticket)
     db.commit()
 
-    logger.info(f"Ticket #{ticket.id} confirmed for {req.client_name} on Bus #{seat.bus_id}")
+    logger.info(
+        f"Ticket #{ticket.id} confirmed for {req.client_name} on Bus #{seat.bus_id} "
+        f"(Mode: {exec_info['strategy_used']}, PID: {exec_info['pid']})"
+    )
 
     # Auto-scaling Calculation at 80% Load Factor
     active_buses = db.query(Bus).filter(Bus.status == "ACTIVE").all()
@@ -238,6 +256,8 @@ def confirm_booking(req: BookingConfirmRequest, db: Session = Depends(get_db)):
 
 @router.post("/cancel")
 def cancelSeatBooking(req: CancelSeatBooking, db: Session = Depends(get_db)):
+    exec_info = execute_current_strategy(delay_seconds=1.5)
+
     db.expire_all()
     seat = (
         db.query(Seat)
@@ -283,6 +303,11 @@ def cancelSeatBooking(req: CancelSeatBooking, db: Session = Depends(get_db)):
     seat.held_by = None
     seat.held_until = None
     db.commit()
+
+    logger.info(
+        f"Seat #{seat.seat_number} on Bus #{seat.bus_id} cancelled by {req.client_name} "
+        f"(Mode: {exec_info['strategy_used']}, PID: {exec_info['pid']})"
+    )
 
     return {
         "message": "Seat cancelled successfully",
