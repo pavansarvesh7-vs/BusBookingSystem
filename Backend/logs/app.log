@@ -1,0 +1,8 @@
+2026-10-27 21:07:30,618 - [INFO] - bus_booking_logger - Execution serving strategy changed to: iterative
+2026-10-27 21:10:12,813 - [INFO] - bus_booking_logger - [/seats] Mode: iterative | PID: 387413 | Thread: AnyIO worker thread | Time: 1.5s
+2026-10-27 21:10:17,502 - [INFO] - bus_booking_logger - [/seats] Mode: iterative | PID: 387413 | Thread: AnyIO worker thread | Time: 1.5s
+2026-10-28 14:09:50,660 - [INFO] - bus_booking_logger - [/seats] Mode: threaded | PID: 468948 | Thread: ThreadPoolExecutor-0_0 | Time: 1.5s
+2026-10-28 14:09:58,240 - [INFO] - bus_booking_logger - Seat 1 on Bus 1 held by Customer_587 (Session #325re) (Mode: threaded, PID: 468948, Thread: ThreadPoolExecutor-0_0)
+2026-10-28 14:10:02,196 - [INFO] - bus_booking_logger - [/seats] Mode: threaded | PID: 468948 | Thread: ThreadPoolExecutor-0_0 | Time: 1.5s
+2026-10-28 14:10:07,262 - [INFO] - bus_booking_logger - Ticket #23 confirmed for Customer_587 (Session #325re) on Bus #1 (Mode: threaded, PID: 468948)
+2026-10-28 14:10:13,150 - [INFO] - bus_booking_logger - [/seats] Mode: threaded | PID: 468948 | Thread: ThreadPoolExecutor-0_0 | Time: 1.5s
