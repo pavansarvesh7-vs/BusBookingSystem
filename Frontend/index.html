@@ -145,25 +145,25 @@
       </div>
     </header>
 
-    <!-- Login Page-->
+    <!-- Login Page -->
     <div id="login-section" class="card">
       <h2>Select Role to Login</h2>
       <button id="customer-login-btn" class="btn" style="width: 48%; margin-right: 2%;">Customer Login</button>
       <button id="admin-login-btn" class="btn btn-warning" style="width: 48%;">Admin Login</button>
     </div>
 
-    <!--Admin Section-->
+    <!-- Admin Section -->
     <div id="admin-section" class="card hidden">
       <h2 style="color: #b45309;">Admin Section</h2>
 
-      <!--Set Initial Number Of Buses-->
+      <!-- Set Initial Number Of Buses -->
       <div class="admin-box">
         <h3>1. Set the Initial Number of Buses</h3>
         <input type="number" id="fleet-size-input" value="10" min="1" max="100">
         <button id="set-fleet-btn" class="btn btn-warning">Update</button>
       </div>
 
-      <!--Merge Buses -->
+      <!-- Merge Buses -->
       <div class="admin-box">
         <h3>2. Merge Buses (LF &lt; 20%)</h3>
         <label>Source Bus ID:</label>
@@ -178,7 +178,7 @@
         <button id="merge-buses-btn" class="btn btn-warning">Merge</button>
       </div>
 
-      <!--Strategy Switcher -->
+      <!-- Strategy Switcher -->
       <div class="admin-box">
         <h3>3. Serving Strategy</h3>
         <label>Serving Mode:</label>
@@ -191,7 +191,7 @@
       </div>
     </div>
 
-    <!-- 3. Customer Bus View-->
+    <!-- Customer Bus View -->
     <div id="bus-list-section" class="card hidden">
       <h2>Available Buses <span style="font-size: 13px; color: #16a34a; font-weight: normal;"></span></h2>
       <label>Select Travel Date:</label>
@@ -200,7 +200,7 @@
       <div id="bus-grid" class="grid"></div>
     </div>
 
-    <!-- 4. Seat Layout-->
+    <!-- Seat Layout -->
     <div id="seat-section" class="card hidden">
       <button id="back-to-buses-btn" class="btn" style="margin-bottom: 15px;">← Back to Buses</button>
       <h2 id="selected-bus-title">Bus Seats</h2>
@@ -236,6 +236,7 @@
       let selectedSeatNumber = null;
       let holdTimer = null;
       let pollInterval = null;
+      let seatPollInterval = null;
 
       function getSessionToken() {
         let token = sessionStorage.getItem('user_session_token');
@@ -289,6 +290,7 @@
           document.getElementById('admin-section').classList.remove('hidden');
           document.getElementById('bus-list-section').classList.add('hidden');
           clearInterval(pollInterval);
+          clearInterval(seatPollInterval);
         } else {
           document.getElementById('admin-section').classList.add('hidden');
           document.getElementById('bus-list-section').classList.remove('hidden');
@@ -307,6 +309,7 @@
         sessionStorage.removeItem('user_session_token');
         clearInterval(holdTimer);
         clearInterval(pollInterval);
+        clearInterval(seatPollInterval);
         document.getElementById('user-info').classList.add('hidden');
         document.getElementById('admin-section').classList.add('hidden');
         document.getElementById('bus-list-section').classList.add('hidden');
@@ -317,8 +320,18 @@
       async function setFleetSize() {
         const size = document.getElementById('fleet-size-input').value;
         try {
-          const res = await fetch(API_URL + '/admin/buses/set-fleet?count=' + size, { method: 'POST' });
+          let res = await fetch(API_URL + '/admin/buses/set-fleet?count=' + size, { method: 'POST' });
+          if (res.status === 404) {
+            res = await fetch(API_URL + '/admin/set-fleet?count=' + size, { method: 'POST' });
+          }
+          if (res.status === 404) {
+            res = await fetch(API_URL + '/set-fleet?count=' + size, { method: 'POST' });
+          }
           const data = await res.json();
+          if (!res.ok) {
+            const msg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+            throw new Error(msg || 'Fleet update failed');
+          }
           alert(data.message || 'Fleet updated!');
           busChannel.postMessage({ type: 'FLEET_UPDATED' });
         } catch (err) {
@@ -337,7 +350,7 @@
         }
 
         try {
-          const res = await fetch(API_URL + '/admin/buses/merge', {
+          let res = await fetch(API_URL + '/admin/buses/merge', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -347,10 +360,37 @@
             })
           });
 
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.detail || 'Merge failed');
-          alert(data.message || 'Merge successful!');
+          if (res.status === 404) {
+            res = await fetch(API_URL + '/admin/merge', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                source_bus_id: parseInt(sourceId),
+                target_bus_id: parseInt(targetId),
+                travel_date: date
+              })
+            });
+          }
 
+          if (res.status === 404) {
+            res = await fetch(API_URL + '/merge', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                source_bus_id: parseInt(sourceId),
+                target_bus_id: parseInt(targetId),
+                travel_date: date
+              })
+            });
+          }
+
+          const data = await res.json();
+          if (!res.ok) {
+            const msg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+            throw new Error(msg || 'Merge failed');
+          }
+
+          alert(data.message || 'Merge successful!');
           busChannel.postMessage({ type: 'FLEET_UPDATED' });
         } catch (err) {
           alert('Merge Error: ' + err.message);
@@ -360,12 +400,22 @@
       async function setStrategy() {
         const strategy = document.getElementById('strategy-select').value;
         try {
-          const res = await fetch(API_URL + '/admin/strategy', {
+          let res = await fetch(API_URL + '/admin/strategy', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ strategy: strategy })
           });
+
+          if (res.status === 404) {
+            res = await fetch(API_URL + '/strategy', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ strategy: strategy })
+            });
+          }
+
           const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || 'Strategy change failed');
           alert(data.message || ('Strategy mode switched to ' + strategy));
         } catch (err) {
           alert('Error setting strategy: ' + err.message);
@@ -415,18 +465,29 @@
         document.getElementById('bus-list-section').classList.add('hidden');
         document.getElementById('seat-section').classList.remove('hidden');
 
-        // Clean title before appending suffix to prevent duplicates
         const cleanBusName = busName.split(' - Seat Selection')[0];
         document.getElementById('selected-bus-title').innerText = cleanBusName + ' - Seat Selection';
 
+        // 1. Initial user click: is_poll = false (Increments view_count by 1)
+        await fetchAndRenderSeats(busId, date, false);
+
+        // 2. Background polling: is_poll = true (Does NOT increment view_count)
+        clearInterval(seatPollInterval);
+        seatPollInterval = setInterval(function() {
+          fetchAndRenderSeats(busId, date, true);
+        }, 1200);
+      }
+
+      async function fetchAndRenderSeats(busId, date, isPoll = false) {
         try {
-          const res = await fetch(API_URL + '/seats?bus_id=' + busId + '&travel_date=' + date);
+          const res = await fetch(API_URL + '/seats?bus_id=' + busId + '&travel_date=' + date + '&is_poll=' + isPoll);
+          if (!res.ok) return;
           const data = await res.json();
 
           document.getElementById('views-count-display').innerText = 'Total Viewers for this Bus: ' + (data.views_count || 0);
           renderSeatGrid(data.seats || []);
         } catch (err) {
-          alert('Failed to load seats: ' + err.message);
+          // Silent failure during polling
         }
       }
 
@@ -477,8 +538,8 @@
           if (!res.ok) throw new Error(data.detail || 'Hold action failed');
 
           alert('Seat held for 5 minutes by ' + currentUsername + '!');
-          startHoldTimer(300);
-          viewSeats(selectedBusId, document.getElementById('selected-bus-title').innerText);
+          startHoldTimer(300,selectedSeatNumber);
+          fetchAndRenderSeats(selectedBusId, date, true);
         } catch (err) {
           alert('Error: ' + err.message);
         }
@@ -506,7 +567,7 @@
           alert('Booking Confirmed! Ticket ID: ' + data.ticket_id);
           clearInterval(holdTimer);
           document.getElementById('hold-timer-display').innerText = '';
-          viewSeats(selectedBusId, document.getElementById('selected-bus-title').innerText);
+          fetchAndRenderSeats(selectedBusId, date, true);
         } catch (err) {
           alert('Error: ' + err.message);
         }
@@ -534,21 +595,21 @@
           alert('Booking or hold cancelled successfully!');
           clearInterval(holdTimer);
           document.getElementById('hold-timer-display').innerText = '';
-          viewSeats(selectedBusId, document.getElementById('selected-bus-title').innerText);
+          fetchAndRenderSeats(selectedBusId, date, true);
         } catch (err) {
           alert('Error: ' + err.message);
         }
       }
 
-      function startHoldTimer(durationSeconds) {
+      function startHoldTimer(durationSeconds,s_no) {
         clearInterval(holdTimer);
         let timer = durationSeconds;
         const timerDisplay = document.getElementById('hold-timer-display');
-
+        // number=seat_number
         holdTimer = setInterval(function() {
           const minutes = Math.floor(timer / 60);
           const seconds = timer % 60;
-          timerDisplay.innerText = 'Hold Expires In: ' + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+          timerDisplay.innerText = 'Hold on seat#'+s_no+' Expires In: ' + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
 
           if (--timer < 0) {
             clearInterval(holdTimer);
@@ -559,6 +620,7 @@
 
       function backToBuses() {
         clearInterval(holdTimer);
+        clearInterval(seatPollInterval);
         document.getElementById('seat-section').classList.add('hidden');
         document.getElementById('seat-actions').classList.add('hidden');
         document.getElementById('bus-list-section').classList.remove('hidden');
